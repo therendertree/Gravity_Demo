@@ -1,22 +1,22 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-// 相机沿路径点自行移动，player 必须跟上；player 离开相机视野就判负并重开关卡
+// The camera moves along waypoints on its own and the player must keep up; leaving the camera view is a loss and restarts the level
 [RequireComponent(typeof(Camera))]
 public class CameraPathMover : MonoBehaviour
 {
     public PlayerController player;
 
-    // 路径点：在场景里放若干空物体，按顺序拖进来。相机中心会依次经过它们
+    // Waypoints: place empty objects in the scene and drag them in order. The camera center passes through them in sequence
     public Transform[] waypoints;
-    public float speed = 3f;          // 相机移动速度（世界单位/秒）
-    public float startDelay = 0f;     // 开局等待几秒再开始移动，给玩家反应时间
+    public float speed = 3f;          // Camera speed (world units per second)
+    public float startDelay = 0f;     // Seconds to wait before moving at the start, giving the player time to react
 
-    // player 超出视野多少才判负（世界单位），避免刚碰到边缘就死
+    // How far (world units) the player must be outside the view to lose, so touching the edge isn't instant death
     public float outOfViewMargin = 0.5f;
 
     Camera cam;
-    int nextIndex = 1;   // 下一个要前往的路径点
+    int nextIndex = 1;   // Next waypoint to move toward
     float delayTimer;
     bool gameOver;
 
@@ -25,14 +25,14 @@ public class CameraPathMover : MonoBehaviour
         cam = GetComponent<Camera>();
         delayTimer = startDelay;
 
-        // 开局直接放到第一个路径点
+        // Start directly at the first waypoint
         if (waypoints != null && waypoints.Length > 0 && waypoints[0] != null)
             transform.position = WithCameraZ(waypoints[0].position);
     }
 
     void Update()
     {
-        if (gameOver) return;
+        if (gameOver || (player != null && player.HasWon)) return;   // Camera stops after the level is cleared
 
         if (delayTimer > 0f)
         {
@@ -45,7 +45,7 @@ public class CameraPathMover : MonoBehaviour
 
     void LateUpdate()
     {
-        if (gameOver || player == null) return;
+        if (gameOver || player == null || player.HasWon) return;
 
         if (IsPlayerOutOfView())
         {
@@ -58,7 +58,7 @@ public class CameraPathMover : MonoBehaviour
     {
         if (waypoints == null) return;
 
-        // 一帧内可能走过多个很近的路径点，把剩余距离继续用掉，保证速度恒定
+        // Several close waypoints may be passed in one frame; keep using the remaining distance so speed stays constant
         float remaining = speed * Time.deltaTime;
         while (remaining > 0f && nextIndex < waypoints.Length)
         {
@@ -83,7 +83,7 @@ public class CameraPathMover : MonoBehaviour
 
     bool IsPlayerOutOfView()
     {
-        // 正交相机：半高 = orthographicSize，半宽 = 半高 * 宽高比
+        // Orthographic camera: half height = orthographicSize, half width = half height * aspect
         float halfH = cam.orthographicSize;
         float halfW = halfH * cam.aspect;
 
@@ -94,15 +94,15 @@ public class CameraPathMover : MonoBehaviour
 
     void Lose()
     {
-        // 重新加载当前场景 = 回到游戏开始时的那一帧
+        // Reloading the current scene = going back to the first frame of the game
         Scene scene = SceneManager.GetActiveScene();
         SceneManager.LoadScene(scene.buildIndex);
     }
 
-    // 路径点只决定 x/y，z 保持相机自己的（否则相机会贴到 z=0 看不到东西）
+    // Waypoints only set x/y; keep the camera's own z (otherwise it would sit at z=0 and see nothing)
     Vector3 WithCameraZ(Vector3 p) => new Vector3(p.x, p.y, transform.position.z);
 
-    // 在 Scene 视图里画出路径，方便调整
+    // Draw the path in the Scene view for easier tweaking
     void OnDrawGizmos()
     {
         if (waypoints == null) return;
